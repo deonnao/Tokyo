@@ -1,0 +1,107 @@
+import org.apache.commons.math3.optim.PointValuePair;
+import org.apache.commons.math3.optim.linear.*;
+import java.util.Arrays;
+
+public class TransportationProblemSolver {
+
+    public static void main(String[] args) {
+        // Define supply and demand locations and their capacities/requirements
+        String[] supplyLocations = {"S1", "S2"};
+        String[] demandLocations = {"D1", "D2", "D3"};
+        double[] supplyCapacity = {50, 70};
+        double[] demandRequirement = {30, 40, 50};
+
+        double[][] transportationCosts = {
+            {5, 8, 12},
+            {6, 10, 9}
+        };
+
+        // Flatten the transportation costs into a single array
+        double[] flattenedCosts = flattenArray(transportationCosts);
+
+        // Create the linear objective function
+        LinearObjectiveFunction objective = createObjectiveFunction(flattenedCosts);
+
+        // Create an array of linear constraints
+        LinearConstraint[] constraints = createConstraints(supplyLocations, demandLocations, supplyCapacity, demandRequirement);
+
+        LinearConstraintSet constraintSet = new LinearConstraintSet(constraints);
+
+        final int maxIterations = 100;
+        PointValuePair solution = solveLinearProgramming(objective, constraintSet, maxIterations);
+
+        // Print the results
+        printResults(supplyLocations, demandLocations, solution);
+    }
+
+    // Flatten a 2D array into a 1D array
+    private static double[] flattenArray(double[][] array) {
+        return Arrays.stream(array).flatMapToDouble(Arrays::stream).toArray();
+    }
+
+    // Create the linear objective function
+    private static LinearObjectiveFunction createObjectiveFunction(double[] coefficients) {
+        return new LinearObjectiveFunction(coefficients, 0);
+    }
+
+    // Create an array of linear constraints
+    private static LinearConstraint[] createConstraints(String[] supplyLocations, String[] demandLocations, double[] supplyCapacity, double[] demandRequirement) {
+        int numSupply = supplyLocations.length;
+        int numDemand = demandLocations.length;
+        int numVars = numSupply * numDemand;
+        LinearConstraint[] constraints = new LinearConstraint[numSupply + numDemand];
+
+        // Add supply constraints
+        for (int i = 0; i < numSupply; i++) {
+            constraints[i] = createSupplyConstraint(numVars, i, supplyCapacity[i]);
+        }
+
+        // Add demand constraints
+        for (int j = 0; j < numDemand; j++) {
+            constraints[numSupply + j] = createDemandConstraint(numVars, j, demandRequirement[j]);
+        }
+
+        return constraints;
+    }
+
+    // Create a supply constraint
+    private static LinearConstraint createSupplyConstraint(int numVars, int supplyIndex, double supplyCapacity) {
+        double[] coefficients = new double[numVars];
+        coefficients[supplyIndex * numVars / 2 + supplyIndex] = 1;
+        return new LinearConstraint(coefficients, Relationship.LEQ, supplyCapacity);
+    }
+
+    // Create a demand constraint
+    private static LinearConstraint createDemandConstraint(int numVars, int demandIndex, double demandRequirement) {
+        double[] coefficients = new double[numVars];
+        for (int i = 0; i < numVars / 2; i++) {
+            coefficients[demandIndex + i * numVars / 2] = 1;
+        }
+        return new LinearConstraint(coefficients, Relationship.LEQ, demandRequirement);
+    }
+
+    // Solve the linear programming problem
+    private static PointValuePair solveLinearProgramming(LinearObjectiveFunction objective, LinearConstraintSet constraintSet, int maxIterations) {
+        return new SimplexSolver().optimize(new MaxIter(maxIterations), objective, constraintSet, GoalType.MINIMIZE, null);
+    }
+
+    // Print the results
+    private static void printResults(String[] supplyLocations, String[] demandLocations, PointValuePair solution) {
+        System.out.println("Objective Function Value: " + solution.getValue());
+
+        double[] solutionValues = solution.getPoint();
+        int numSupply = supplyLocations.length;
+        int numDemand = demandLocations.length;
+
+        // Display the transportation plan
+        for (int i = 0; i < numSupply; i++) {
+            for (int j = 0; j < numDemand; j++) {
+                int index = i * numDemand + j;
+                double value = solutionValues[index];
+                if (value > 0) {
+                    System.out.printf("Transport %.2f units from %s to %s%n", value, supplyLocations[i], demandLocations[j]);
+                }
+            }
+        }
+    }
+}
